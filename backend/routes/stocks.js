@@ -6,10 +6,11 @@ require('dotenv').config();
 
 const router = express.Router();
 
-// Yahoo Finance 2 — no API key needed, supports Indian stocks (.NS / .BO)
+// Yahoo Finance 2 v3 — no API key needed, supports Indian stocks (.NS / .BO)
 let yahooFinance;
 (async () => {
-  yahooFinance = await import('yahoo-finance2').then((m) => m.default);
+  const YahooFinance = (await import('yahoo-finance2')).default;
+  yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 })();
 
 // Map common Indian stock shorthand to Yahoo Finance symbols
