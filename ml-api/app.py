@@ -19,14 +19,14 @@ def predict():
 
     Expects JSON body:
     {
-        "symbol": "AAPL",
+        "symbol": "RELIANCE.BSE",
         "prices": [150.0, 151.5, ...],
         "dates": ["2024-01-01", ...]
     }
 
     Returns:
     {
-        "symbol": "AAPL",
+        "symbol": "RELIANCE.BSE",
         "predictions": [{"day": 1, "price": 155.2}, ...],
         "confidence": 0.85
     }

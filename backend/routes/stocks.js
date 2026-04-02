@@ -9,7 +9,7 @@ const router = express.Router();
 const ALPHA_VANTAGE_BASE = 'https://www.alphavantage.co/query';
 const API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'demo';
 
-// GET /api/stocks/search?symbol=AAPL
+// GET /api/stocks/search?symbol=RELIANCE.BSE
 router.get('/search', authenticateToken, async (req, res) => {
   try {
     const { symbol } = req.query;
@@ -83,7 +83,7 @@ router.get('/search', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/stocks/predict?symbol=AAPL
+// GET /api/stocks/predict?symbol=RELIANCE.BSE
 router.get('/predict', authenticateToken, async (req, res) => {
   try {
     const { symbol } = req.query;

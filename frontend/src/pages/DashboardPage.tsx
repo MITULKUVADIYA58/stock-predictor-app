@@ -123,10 +123,10 @@ const DashboardPage: React.FC = () => {
   const isFavorited = quote ? favorites.some((f) => f.symbol === quote.symbol) : false;
 
   const formatNumber = (num: number) =>
-    new Intl.NumberFormat('en-US').format(num);
+    new Intl.NumberFormat('en-IN').format(num);
 
   const formatCurrency = (num: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(num);
 
   return (
     <div className="dashboard-layout">
@@ -148,7 +148,7 @@ const DashboardPage: React.FC = () => {
             <input
               type="text"
               className="form-input"
-              placeholder="Search stock symbol (e.g. AAPL, TSLA, TCS.BSE)"
+              placeholder="Search stock symbol (e.g. RELIANCE.BSE, TCS.BSE, INFY.BSE)"
               value={searchSymbol}
               onChange={(e) => setSearchSymbol(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -293,7 +293,7 @@ const DashboardPage: React.FC = () => {
               Search for a stock symbol above to get started
             </p>
             <p style={{ fontSize: '0.85rem', marginTop: 8 }}>
-              Try AAPL, GOOGL, MSFT, TSLA, AMZN, or NVDA
+              Try RELIANCE.BSE, TCS.BSE, INFY.BSE, HDFCBANK.BSE, WIPRO.BSE, or ITC.BSE
             </p>
           </div>
         )}
@@ -353,7 +353,7 @@ const DashboardPage: React.FC = () => {
                 >
                   <span className="history-symbol">🔍 {item.symbol}</span>
                   <span className="history-time">
-                    {new Date(item.searched_at).toLocaleDateString('en-US', {
+                    {new Date(item.searched_at).toLocaleDateString('en-IN', {
                       month: 'short',
                       day: 'numeric',
                       hour: '2-digit',
