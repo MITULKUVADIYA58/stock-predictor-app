@@ -148,7 +148,7 @@ const DashboardPage: React.FC = () => {
             <input
               type="text"
               className="form-input"
-              placeholder="Search stock symbol (e.g. RELIANCE.BSE, TCS.BSE, INFY.BSE)"
+              placeholder="Search stock symbol (e.g. RELIANCE, TCS, INFY, HDFCBANK)"
               value={searchSymbol}
               onChange={(e) => setSearchSymbol(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -171,7 +171,7 @@ const DashboardPage: React.FC = () => {
           <>
             <div className="stats-grid stagger" id="stock-stats">
               <div className="stat-card">
-                <div className="stat-label">Current Price</div>
+                <div className="stat-label">{quote.name || quote.symbol}</div>
                 <div className="stat-value">{formatCurrency(quote.price)}</div>
                 <div className={`stat-change ${quote.change >= 0 ? 'positive' : 'negative'}`}>
                   {quote.change >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(quote.change))} ({quote.changePercent})
@@ -293,7 +293,7 @@ const DashboardPage: React.FC = () => {
               Search for a stock symbol above to get started
             </p>
             <p style={{ fontSize: '0.85rem', marginTop: 8 }}>
-              Try RELIANCE.BSE, TCS.BSE, INFY.BSE, HDFCBANK.BSE, WIPRO.BSE, or ITC.BSE
+              Try RELIANCE, TCS, INFY, HDFCBANK, WIPRO, or ITC
             </p>
           </div>
         )}

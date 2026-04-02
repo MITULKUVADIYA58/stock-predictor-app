@@ -6,8 +6,42 @@ require('dotenv').config();
 
 const router = express.Router();
 
-const ALPHA_VANTAGE_BASE = 'https://www.alphavantage.co/query';
-const API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'demo';
+// Yahoo Finance 2 — no API key needed, supports Indian stocks (.NS / .BO)
+let yahooFinance;
+(async () => {
+  yahooFinance = await import('yahoo-finance2').then((m) => m.default);
+})();
+
+// Map common Indian stock shorthand to Yahoo Finance symbols
+function resolveSymbol(input) {
+  const sym = input.toUpperCase().trim();
+
+  // Indian stock mappings: .BSE -> .BO (Yahoo uses .BO for BSE)
+  if (sym.endsWith('.BSE')) {
+    return sym.replace('.BSE', '.BO');
+  }
+  // .NSE -> .NS
+  if (sym.endsWith('.NSE')) {
+    return sym.replace('.NSE', '.NS');
+  }
+  // If no suffix and it looks like a common Indian stock, default to .NS
+  const indianStocks = [
+    'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'HINDUNILVR',
+    'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'LT', 'HCLTECH',
+    'AXISBANK', 'ASIANPAINT', 'MARUTI', 'SUNPHARMA', 'TITAN',
+    'ULTRACEMCO', 'NESTLEIND', 'WIPRO', 'BAJFINANCE', 'BAJAJFINSV',
+    'POWERGRID', 'NTPC', 'ONGC', 'JSWSTEEL', 'TATAMOTORS',
+    'ADANIENT', 'ADANIPORTS', 'TATASTEEL', 'TECHM', 'INDUSINDBK',
+    'COALINDIA', 'HINDALCO', 'DRREDDY', 'CIPLA', 'EICHERMOT',
+    'DIVISLAB', 'BPCL', 'GRASIM', 'APOLLOHOSP', 'HEROMOTOCO',
+    'TATACONSUM', 'BRITANNIA', 'BAJAJ-AUTO', 'M&M', 'UPL',
+  ];
+  if (indianStocks.includes(sym)) {
+    return sym + '.NS';
+  }
+
+  return sym; // Return as-is for international stocks (AAPL, GOOGL, etc.)
+}
 
 // GET /api/stocks/search?symbol=RELIANCE.BSE
 router.get('/search', authenticateToken, async (req, res) => {
@@ -17,18 +51,13 @@ router.get('/search', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Stock symbol is required.' });
     }
 
-    // Fetch quote from Alpha Vantage
-    const quoteResponse = await axios.get(ALPHA_VANTAGE_BASE, {
-      params: {
-        function: 'GLOBAL_QUOTE',
-        symbol: symbol.toUpperCase(),
-        apikey: API_KEY,
-      },
-    });
+    const yahooSymbol = resolveSymbol(symbol);
 
-    const quoteData = quoteResponse.data['Global Quote'];
-    if (!quoteData || Object.keys(quoteData).length === 0) {
-      return res.status(404).json({ error: 'Stock not found or API limit reached. Try again later.' });
+    // Fetch quote from Yahoo Finance
+    const quoteData = await yahooFinance.quote(yahooSymbol);
+
+    if (!quoteData || !quoteData.regularMarketPrice) {
+      return res.status(404).json({ error: 'Stock not found. Please check the symbol and try again.' });
     }
 
     // Save to search history
@@ -39,47 +68,60 @@ router.get('/search', authenticateToken, async (req, res) => {
       },
     ]);
 
-    // Fetch daily time series for chart data
-    const timeSeriesResponse = await axios.get(ALPHA_VANTAGE_BASE, {
-      params: {
-        function: 'TIME_SERIES_DAILY',
-        symbol: symbol.toUpperCase(),
-        outputsize: 'compact',
-        apikey: API_KEY,
-      },
+    // Fetch historical data for chart (last 30 days)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 60);
+
+    const historicalResult = await yahooFinance.chart(yahooSymbol, {
+      period1: startDate.toISOString().split('T')[0],
+      period2: endDate.toISOString().split('T')[0],
+      interval: '1d',
     });
 
-    const timeSeries = timeSeriesResponse.data['Time Series (Daily)'] || {};
-    const historicalData = Object.entries(timeSeries)
-      .slice(0, 30)
-      .reverse()
-      .map(([date, values]) => ({
-        date,
-        open: parseFloat(values['1. open']),
-        high: parseFloat(values['2. high']),
-        low: parseFloat(values['3. low']),
-        close: parseFloat(values['4. close']),
-        volume: parseInt(values['5. volume']),
+    const historicalData = (historicalResult.quotes || [])
+      .filter((q) => q.close !== null)
+      .slice(-30)
+      .map((q) => ({
+        date: new Date(q.date).toISOString().split('T')[0],
+        open: parseFloat(q.open?.toFixed(2) || 0),
+        high: parseFloat(q.high?.toFixed(2) || 0),
+        low: parseFloat(q.low?.toFixed(2) || 0),
+        close: parseFloat(q.close?.toFixed(2) || 0),
+        volume: q.volume || 0,
       }));
+
+    const change = quoteData.regularMarketChange || 0;
+    const changePercent = quoteData.regularMarketChangePercent
+      ? quoteData.regularMarketChangePercent.toFixed(2) + '%'
+      : '0.00%';
 
     res.json({
       quote: {
-        symbol: quoteData['01. symbol'],
-        open: parseFloat(quoteData['02. open']),
-        high: parseFloat(quoteData['03. high']),
-        low: parseFloat(quoteData['04. low']),
-        price: parseFloat(quoteData['05. price']),
-        volume: parseInt(quoteData['06. volume']),
-        latestTradingDay: quoteData['07. latest trading day'],
-        previousClose: parseFloat(quoteData['08. previous close']),
-        change: parseFloat(quoteData['09. change']),
-        changePercent: quoteData['10. change percent'],
+        symbol: quoteData.symbol,
+        name: quoteData.shortName || quoteData.longName || quoteData.symbol,
+        open: quoteData.regularMarketOpen || 0,
+        high: quoteData.regularMarketDayHigh || 0,
+        low: quoteData.regularMarketDayLow || 0,
+        price: quoteData.regularMarketPrice || 0,
+        volume: quoteData.regularMarketVolume || 0,
+        latestTradingDay: quoteData.regularMarketTime
+          ? new Date(quoteData.regularMarketTime * 1000).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0],
+        previousClose: quoteData.regularMarketPreviousClose || 0,
+        change: parseFloat(change.toFixed(2)),
+        changePercent,
+        currency: quoteData.currency || 'INR',
+        exchange: quoteData.exchange || '',
       },
       historicalData,
     });
   } catch (err) {
     console.error('Stock search error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch stock data.' });
+    if (err.message?.includes('Not Found') || err.message?.includes('no results')) {
+      return res.status(404).json({ error: 'Stock not found. Please check the symbol and try again.' });
+    }
+    res.status(500).json({ error: 'Failed to fetch stock data. Please try again.' });
   }
 });
 
@@ -91,23 +133,25 @@ router.get('/predict', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Stock symbol is required.' });
     }
 
-    // Fetch historical data for prediction
-    const timeSeriesResponse = await axios.get(ALPHA_VANTAGE_BASE, {
-      params: {
-        function: 'TIME_SERIES_DAILY',
-        symbol: symbol.toUpperCase(),
-        outputsize: 'compact',
-        apikey: API_KEY,
-      },
+    const yahooSymbol = resolveSymbol(symbol);
+
+    // Fetch historical data for prediction (60 days)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 120);
+
+    const historicalResult = await yahooFinance.chart(yahooSymbol, {
+      period1: startDate.toISOString().split('T')[0],
+      period2: endDate.toISOString().split('T')[0],
+      interval: '1d',
     });
 
-    const timeSeries = timeSeriesResponse.data['Time Series (Daily)'] || {};
-    const historicalPrices = Object.entries(timeSeries)
-      .slice(0, 60)
-      .reverse()
-      .map(([date, values]) => ({
-        date,
-        close: parseFloat(values['4. close']),
+    const historicalPrices = (historicalResult.quotes || [])
+      .filter((q) => q.close !== null)
+      .slice(-60)
+      .map((q) => ({
+        date: new Date(q.date).toISOString().split('T')[0],
+        close: parseFloat(q.close?.toFixed(2) || 0),
       }));
 
     if (historicalPrices.length < 10) {

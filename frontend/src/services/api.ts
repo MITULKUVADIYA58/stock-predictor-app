@@ -47,6 +47,7 @@ export const authAPI = {
 
 export interface StockQuote {
   symbol: string;
+  name: string;
   open: number;
   high: number;
   low: number;
@@ -56,6 +57,8 @@ export interface StockQuote {
   previousClose: number;
   change: number;
   changePercent: string;
+  currency: string;
+  exchange: string;
 }
 
 export interface HistoricalDataPoint {
