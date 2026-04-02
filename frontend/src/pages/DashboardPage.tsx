@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import StockChart from '../components/StockChart';
@@ -11,6 +11,8 @@ import {
   SearchHistoryItem,
 } from '../services/api';
 
+const POLL_INTERVAL = 5000; // Poll every 5 seconds
+
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const [searchSymbol, setSearchSymbol] = useState('');
@@ -22,6 +24,16 @@ const DashboardPage: React.FC = () => {
   const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [confidence, setConfidence] = useState<number>(0);
+
+  // Live update state
+  const [isLive, setIsLive] = useState(false);
+  const [prevPrice, setPrevPrice] = useState<number | null>(null);
+  const [priceDirection, setPriceDirection] = useState<'up' | 'down' | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [secondsSinceUpdate, setSecondsSinceUpdate] = useState(0);
+  const [liveError, setLiveError] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Favorites & history
   const [favorites, setFavorites] = useState<Favorite[]>([]);
@@ -53,6 +65,89 @@ const DashboardPage: React.FC = () => {
     loadFavoritesAndHistory();
   }, [loadFavoritesAndHistory]);
 
+  // Live price polling
+  const fetchLiveQuote = useCallback(async (symbol: string) => {
+    try {
+      const response = await stockAPI.liveQuote(symbol);
+      const liveData = response.data;
+
+      setQuote((prev) => {
+        if (prev) {
+          const oldPrice = prev.price;
+          const newPrice = liveData.price;
+
+          if (newPrice !== oldPrice) {
+            setPrevPrice(oldPrice);
+            setPriceDirection(newPrice > oldPrice ? 'up' : 'down');
+            // Clear direction flash after 1.5s
+            setTimeout(() => setPriceDirection(null), 1500);
+          }
+        }
+
+        return {
+          ...prev!,
+          price: liveData.price,
+          open: liveData.open,
+          high: liveData.high,
+          low: liveData.low,
+          volume: liveData.volume,
+          previousClose: liveData.previousClose,
+          change: liveData.change,
+          changePercent: liveData.changePercent,
+          symbol: liveData.symbol,
+          name: liveData.name,
+          currency: liveData.currency,
+          exchange: liveData.exchange,
+        };
+      });
+
+      setLastUpdated(new Date());
+      setSecondsSinceUpdate(0);
+      setLiveError(false);
+    } catch {
+      setLiveError(true);
+    }
+  }, []);
+
+  // Start/stop live polling
+  const startLivePolling = useCallback((symbol: string) => {
+    // Clear existing intervals
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (tickerRef.current) clearInterval(tickerRef.current);
+
+    setIsLive(true);
+    setLiveError(false);
+
+    // Poll for new prices every 5 seconds
+    pollRef.current = setInterval(() => {
+      fetchLiveQuote(symbol);
+    }, POLL_INTERVAL);
+
+    // Update "seconds ago" ticker every second
+    tickerRef.current = setInterval(() => {
+      setSecondsSinceUpdate((prev) => prev + 1);
+    }, 1000);
+  }, [fetchLiveQuote]);
+
+  const stopLivePolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    if (tickerRef.current) {
+      clearInterval(tickerRef.current);
+      tickerRef.current = null;
+    }
+    setIsLive(false);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopLivePolling();
+    };
+  }, [stopLivePolling]);
+
   const handleSearch = async (symbol?: string) => {
     const query = (symbol || searchSymbol).trim().toUpperCase();
     if (!query) {
@@ -64,13 +159,21 @@ const DashboardPage: React.FC = () => {
     setIsSearching(true);
     setPredictions([]);
     setConfidence(0);
+    stopLivePolling();
+    setPrevPrice(null);
+    setPriceDirection(null);
 
     try {
       const response = await stockAPI.search(query);
       setQuote(response.data.quote);
       setHistoricalData(response.data.historicalData);
       setSearchSymbol(query);
+      setLastUpdated(new Date());
+      setSecondsSinceUpdate(0);
       loadFavoritesAndHistory();
+
+      // Start live polling after initial search
+      startLivePolling(query);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
       setError(axiosErr.response?.data?.error || 'Failed to fetch stock data. Check the symbol and try again.');
@@ -128,6 +231,11 @@ const DashboardPage: React.FC = () => {
   const formatCurrency = (num: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(num);
 
+  const getPriceFlashClass = () => {
+    if (!priceDirection) return '';
+    return priceDirection === 'up' ? 'price-flash-up' : 'price-flash-down';
+  };
+
   return (
     <div className="dashboard-layout">
       <Navbar />
@@ -166,16 +274,67 @@ const DashboardPage: React.FC = () => {
           {error && <div className="alert alert-error" style={{ marginTop: 12, maxWidth: 600 }}>{error}</div>}
         </section>
 
+        {/* Live Ticker Bar */}
+        {quote && isLive && (
+          <div className="live-ticker-bar animate-fade-in">
+            <div className="live-ticker-left">
+              <span className={`live-badge ${liveError ? 'live-badge-error' : ''}`}>
+                <span className="pulse-dot-sm"></span>
+                {liveError ? 'RECONNECTING' : 'LIVE'}
+              </span>
+              <span className="live-ticker-symbol">{quote.symbol}</span>
+              <span className={`live-ticker-price ${getPriceFlashClass()}`}>
+                {formatCurrency(quote.price)}
+              </span>
+              <span className={`live-ticker-change ${quote.change >= 0 ? 'positive' : 'negative'}`}>
+                {quote.change >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(quote.change))} ({quote.changePercent})
+              </span>
+            </div>
+            <div className="live-ticker-right">
+              <span className="live-ticker-time">
+                Updated {secondsSinceUpdate}s ago
+              </span>
+              <button
+                className="btn-icon btn-sm live-toggle"
+                onClick={() => { stopLivePolling(); setIsLive(false); }}
+                title="Stop live updates"
+              >
+                ⏸
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Resume live button when paused */}
+        {quote && !isLive && !isSearching && (
+          <div className="live-resume-bar animate-fade-in">
+            <span>Live updates paused</span>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => startLivePolling(searchSymbol)}
+            >
+              ▶ Resume Live
+            </button>
+          </div>
+        )}
+
         {/* Stock Stats Grid */}
         {quote && (
           <>
             <div className="stats-grid stagger" id="stock-stats">
-              <div className="stat-card">
+              <div className={`stat-card stat-card-main ${getPriceFlashClass()}`}>
                 <div className="stat-label">{quote.name || quote.symbol}</div>
-                <div className="stat-value">{formatCurrency(quote.price)}</div>
+                <div className={`stat-value stat-value-live ${getPriceFlashClass()}`}>
+                  {formatCurrency(quote.price)}
+                </div>
                 <div className={`stat-change ${quote.change >= 0 ? 'positive' : 'negative'}`}>
                   {quote.change >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(quote.change))} ({quote.changePercent})
                 </div>
+                {prevPrice !== null && prevPrice !== quote.price && (
+                  <div className="price-prev">
+                    was {formatCurrency(prevPrice)}
+                  </div>
+                )}
               </div>
               <div className="stat-card">
                 <div className="stat-label">Open</div>
@@ -229,6 +388,11 @@ const DashboardPage: React.FC = () => {
                   📊 {quote.symbol} Price Chart
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                     <span className="pulse-dot"></span> Live
+                    {lastUpdated && (
+                      <span style={{ marginLeft: 8, fontSize: '0.7rem', opacity: 0.6 }}>
+                        {lastUpdated.toLocaleTimeString('en-IN')}
+                      </span>
+                    )}
                   </span>
                 </h3>
                 <div className="chart-wrapper">

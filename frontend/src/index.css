@@ -909,3 +909,195 @@ a:hover {
     transform: translateX(0);
   }
 }
+
+/* ═══ Live Ticker Bar ═══ */
+.live-ticker-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(99, 102, 241, 0.06) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-md);
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.live-ticker-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.live-ticker-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--success);
+  text-transform: uppercase;
+}
+
+.live-badge-error {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: var(--warning);
+}
+
+.pulse-dot-sm {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+  animation: pulseLive 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseLive {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+.live-ticker-symbol {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+.live-ticker-price {
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--text-primary);
+  transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+.live-ticker-change {
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.live-ticker-change.positive {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.live-ticker-change.negative {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.live-ticker-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 100px;
+  text-align: right;
+}
+
+.live-toggle {
+  padding: 6px 10px !important;
+  font-size: 0.8rem;
+}
+
+/* Live resume bar */
+.live-resume-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-bottom: 24px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ═══ Price Flash Animations ═══ */
+.price-flash-up {
+  animation: flashGreen 1.5s ease-out;
+}
+
+.price-flash-down {
+  animation: flashRed 1.5s ease-out;
+}
+
+@keyframes flashGreen {
+  0% {
+    color: var(--success);
+    text-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+  }
+  30% {
+    color: var(--success);
+    text-shadow: 0 0 30px rgba(16, 185, 129, 0.8);
+  }
+  100% {
+    color: var(--text-primary);
+    text-shadow: none;
+  }
+}
+
+@keyframes flashRed {
+  0% {
+    color: var(--danger);
+    text-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+  }
+  30% {
+    color: var(--danger);
+    text-shadow: 0 0 30px rgba(239, 68, 68, 0.8);
+  }
+  100% {
+    color: var(--text-primary);
+    text-shadow: none;
+  }
+}
+
+/* Stat card flash glow */
+.stat-card-main.price-flash-up {
+  animation: cardGlowGreen 1.5s ease-out;
+}
+
+.stat-card-main.price-flash-down {
+  animation: cardGlowRed 1.5s ease-out;
+}
+
+@keyframes cardGlowGreen {
+  0% { border-color: rgba(16, 185, 129, 0.6); box-shadow: 0 0 24px rgba(16, 185, 129, 0.2); }
+  100% { border-color: var(--border-subtle); box-shadow: none; }
+}
+
+@keyframes cardGlowRed {
+  0% { border-color: rgba(239, 68, 68, 0.6); box-shadow: 0 0 24px rgba(239, 68, 68, 0.2); }
+  100% { border-color: var(--border-subtle); box-shadow: none; }
+}
+
+.stat-value-live {
+  transition: color 0.3s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.price-prev {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-style: italic;
+  opacity: 0.7;
+}
+

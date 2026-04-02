@@ -80,6 +80,22 @@ export interface StockSearchResponse {
   historicalData: HistoricalDataPoint[];
 }
 
+export interface LiveQuote {
+  symbol: string;
+  name: string;
+  price: number;
+  open: number;
+  high: number;
+  low: number;
+  volume: number;
+  previousClose: number;
+  change: number;
+  changePercent: string;
+  currency: string;
+  exchange: string;
+  timestamp: number;
+}
+
 export interface PredictionResponse {
   symbol: string;
   currentPrice: number;
@@ -106,6 +122,9 @@ export interface SearchHistoryItem {
 export const stockAPI = {
   search: (symbol: string) =>
     api.get<StockSearchResponse>('/stocks/search', { params: { symbol } }),
+
+  liveQuote: (symbol: string) =>
+    api.get<LiveQuote>('/stocks/live-quote', { params: { symbol } }),
 
   predict: (symbol: string) =>
     api.get<PredictionResponse>('/stocks/predict', { params: { symbol } }),

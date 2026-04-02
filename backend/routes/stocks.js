@@ -126,6 +126,47 @@ router.get('/search', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/stocks/live-quote?symbol=RELIANCE — lightweight endpoint for real-time polling
+router.get('/live-quote', authenticateToken, async (req, res) => {
+  try {
+    const { symbol } = req.query;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Stock symbol is required.' });
+    }
+
+    const yahooSymbol = resolveSymbol(symbol);
+    const quoteData = await yahooFinance.quote(yahooSymbol);
+
+    if (!quoteData || !quoteData.regularMarketPrice) {
+      return res.status(404).json({ error: 'Stock not found.' });
+    }
+
+    const change = quoteData.regularMarketChange || 0;
+    const changePercent = quoteData.regularMarketChangePercent
+      ? quoteData.regularMarketChangePercent.toFixed(2) + '%'
+      : '0.00%';
+
+    res.json({
+      symbol: quoteData.symbol,
+      name: quoteData.shortName || quoteData.longName || quoteData.symbol,
+      price: quoteData.regularMarketPrice || 0,
+      open: quoteData.regularMarketOpen || 0,
+      high: quoteData.regularMarketDayHigh || 0,
+      low: quoteData.regularMarketDayLow || 0,
+      volume: quoteData.regularMarketVolume || 0,
+      previousClose: quoteData.regularMarketPreviousClose || 0,
+      change: parseFloat(change.toFixed(2)),
+      changePercent,
+      currency: quoteData.currency || 'INR',
+      exchange: quoteData.exchange || '',
+      timestamp: Date.now(),
+    });
+  } catch (err) {
+    console.error('Live quote error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch live quote.' });
+  }
+});
+
 // GET /api/stocks/predict?symbol=RELIANCE.BSE
 router.get('/predict', authenticateToken, async (req, res) => {
   try {
