@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { isMarketOpen } from '../utils/market';
 
 const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -46,18 +47,7 @@ const Navbar: React.FC = () => {
     });
   };
 
-  // Check if market is open (9:15 AM - 3:30 PM IST, Mon-Fri)
-  const isMarketOpen = () => {
-    const now = new Date();
-    const day = now.getDay();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const totalMinutes = hours * 60 + minutes;
 
-    if (day === 0 || day === 6) return false; // Weekend
-    if (totalMinutes >= 9 * 60 + 15 && totalMinutes <= 15 * 60 + 30) return true;
-    return false;
-  };
 
   const marketOpen = isMarketOpen();
 

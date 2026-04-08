@@ -1235,12 +1235,21 @@ a:hover {
   margin-top: 6px;
 }
 
+.market-status.market-closed {
+  color: var(--danger);
+}
+
 .market-status-dot {
   width: 7px;
   height: 7px;
   background: var(--success);
   border-radius: 50%;
   animation: pulseLive 1.5s ease-in-out infinite;
+}
+
+.market-status.market-closed .market-status-dot {
+  background: var(--danger);
+  animation: none;
 }
 
 /* ═══ Navbar Live Clock ═══ */

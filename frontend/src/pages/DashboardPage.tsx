@@ -12,6 +12,7 @@ import {
   SearchHistoryItem,
   PopularStock,
 } from '../services/api';
+import { isMarketOpen } from '../utils/market';
 
 const POLL_INTERVAL = 1000; // Poll every 1 second for real-time updates
 
@@ -273,6 +274,8 @@ const DashboardPage: React.FC = () => {
     return ((price - low) / (high - low)) * 100;
   };
 
+  const marketOpen = isMarketOpen();
+
   return (
     <div className="dashboard-layout">
       <Navbar />
@@ -370,9 +373,9 @@ const DashboardPage: React.FC = () => {
                 <div className={`stat-change ${quote.change >= 0 ? 'positive' : 'negative'}`}>
                   {quote.change >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(quote.change))} ({quote.changePercent})
                 </div>
-                <div className="market-status">
+                <div className={`market-status ${!marketOpen ? 'market-closed' : ''}`}>
                   <span className="market-status-dot"></span>
-                  Market Open
+                  {marketOpen ? 'Market Open' : 'Market Closed'}
                 </div>
               </div>
               <div className="stat-card">
