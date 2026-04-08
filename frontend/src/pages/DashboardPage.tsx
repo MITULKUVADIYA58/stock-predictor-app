@@ -58,6 +58,7 @@ const DashboardPage: React.FC = () => {
   // Errors & toasts
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [salesforceConnected, setSalesforceConnected] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -558,6 +559,18 @@ const DashboardPage: React.FC = () => {
                 id="favorite-btn"
               >
                 {isFavorited ? '💛 Favorited' : '🤍 Add to Favorites'}
+              </button>
+
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  window.open('https://stockvision-backend-n0ns.onrender.com/api/salesforce/auth', '_blank');
+                  setSalesforceConnected(true);
+                  showToast('Connecting to Salesforce Org...', 'success');
+                }}
+                title="Push data to Salesforce Org"
+              >
+                ☁️ {salesforceConnected ? 'Synced to Salesforce' : 'Connect Salesforce'}
               </button>
             </div>
 
