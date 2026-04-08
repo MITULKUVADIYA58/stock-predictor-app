@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+// Trigger redeploy for search suggestions feature
 
 const authRoutes = require('./routes/auth');
 const stockRoutes = require('./routes/stocks');
