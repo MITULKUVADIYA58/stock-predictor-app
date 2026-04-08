@@ -358,6 +358,19 @@ const DashboardPage: React.FC = () => {
           <div>
             <h2>Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}, {user?.name?.split(' ')[0] || 'Trader'} 👋</h2>
             <p>Search any stock symbol to view real-time data and AI predictions.</p>
+            <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+              <button
+                className="btn btn-sm btn-secondary"
+                onClick={() => {
+                  window.open('https://stockvision-backend-n0ns.onrender.com/api/salesforce/auth', '_blank');
+                  setSalesforceConnected(true);
+                  showToast('Connecting to Salesforce Org...', 'success');
+                }}
+                title="Connect and push to your Salesforce Org"
+              >
+                ☁️ {salesforceConnected ? 'Synced to Salesforce' : 'Connect Salesforce'}
+              </button>
+            </div>
           </div>
           <div className="welcome-icon">🚀</div>
         </div>
@@ -559,18 +572,6 @@ const DashboardPage: React.FC = () => {
                 id="favorite-btn"
               >
                 {isFavorited ? '💛 Favorited' : '🤍 Add to Favorites'}
-              </button>
-
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  window.open('https://stockvision-backend-n0ns.onrender.com/api/salesforce/auth', '_blank');
-                  setSalesforceConnected(true);
-                  showToast('Connecting to Salesforce Org...', 'success');
-                }}
-                title="Push data to Salesforce Org"
-              >
-                ☁️ {salesforceConnected ? 'Synced to Salesforce' : 'Connect Salesforce'}
               </button>
             </div>
 
