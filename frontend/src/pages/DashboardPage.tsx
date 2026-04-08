@@ -13,7 +13,7 @@ import {
   PopularStock,
 } from '../services/api';
 
-const POLL_INTERVAL = 5000; // Poll every 5 seconds
+const POLL_INTERVAL = 1000; // Poll every 1 second for real-time updates
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -105,13 +105,13 @@ const DashboardPage: React.FC = () => {
           if (newPrice !== oldPrice) {
             setPrevPrice(oldPrice);
             setPriceDirection(newPrice > oldPrice ? 'up' : 'down');
-            setTimeout(() => setPriceDirection(null), 1500);
+            setTimeout(() => setPriceDirection(null), 800);
           }
 
           if (newVolume !== oldVolume) {
             setPrevVolume(oldVolume);
             setVolumeDirection(newVolume > oldVolume ? 'up' : 'down');
-            setTimeout(() => setVolumeDirection(null), 1500);
+            setTimeout(() => setVolumeDirection(null), 800);
           }
         }
 
@@ -485,9 +485,11 @@ const DashboardPage: React.FC = () => {
                 </h3>
                 <div className="chart-wrapper">
                   <StockChart
-                    historicalData={historicalData.map((d) => ({ date: d.date, close: d.close }))}
-                    predictions={predictions.length > 0 ? predictions : undefined}
+                    historicalData={historicalData}
                     symbol={quote.symbol}
+                    livePrice={quote.price}
+                    liveVolume={quote.volume}
+                    predictions={predictions.length > 0 ? predictions : undefined}
                   />
                 </div>
               </div>

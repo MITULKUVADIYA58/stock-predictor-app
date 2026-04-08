@@ -1,36 +1,29 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
-import { stockAPI, HistoricalDataPoint, TimeFrame } from '../services/api';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+  createChart,
+  ColorType,
+  CrosshairMode,
+  CandlestickSeries,
+  HistogramSeries,
+  LineSeries,
+} from 'lightweight-charts';
+import type {
+  IChartApi,
+  ISeriesApi,
+  CandlestickData,
+  HistogramData,
+  LineData,
+  Time,
+} from 'lightweight-charts';
+import { stockAPI, HistoricalDataPoint, TimeFrame, Prediction } from '../services/api';
 
 interface StockChartProps {
-  historicalData: { date: string; close: number }[];
-  predictions?: { day: number; price: number }[];
+  historicalData: HistoricalDataPoint[];
   symbol: string;
+  livePrice?: number;
+  liveVolume?: number;
+  predictions?: Prediction[];
 }
 
 const TIMEFRAMES: { label: string; value: TimeFrame }[] = [
@@ -43,22 +36,313 @@ const TIMEFRAMES: { label: string; value: TimeFrame }[] = [
   { label: '5Y', value: '5Y' },
 ];
 
+function formatVol(vol: number): string {
+  if (vol >= 10000000) return (vol / 10000000).toFixed(2) + ' Cr';
+  if (vol >= 100000) return (vol / 100000).toFixed(2) + ' L';
+  if (vol >= 1000) return (vol / 1000).toFixed(1) + ' K';
+  return vol.toFixed(0);
+}
+
 const StockChart: React.FC<StockChartProps> = ({
   historicalData: defaultData,
-  predictions,
   symbol,
+  livePrice,
+  liveVolume,
+  predictions,
 }) => {
   const [activeTimeframe, setActiveTimeframe] = useState<TimeFrame>('1M');
-  const [chartData, setChartData] = useState<{ date: string; close: number }[]>(
-    defaultData
-  );
+  const [chartData, setChartData] = useState<HistoricalDataPoint[]>(defaultData);
   const [isLoadingTimeframe, setIsLoadingTimeframe] = useState(false);
+
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const candlestickSeriesRef = useRef<ISeriesApi<any> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<any> | null>(null);
+  const predictionSeriesRef = useRef<ISeriesApi<any> | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  // Reset on new search
+  useEffect(() => {
+    setChartData(defaultData);
+    setActiveTimeframe('1M');
+  }, [defaultData, symbol]);
+
+  // Build chart
+  useEffect(() => {
+    if (!chartContainerRef.current || chartData.length === 0) return;
+
+    if (chartRef.current) {
+      chartRef.current.remove();
+      chartRef.current = null;
+    }
+
+    const container = chartContainerRef.current;
+
+    const chart = createChart(container, {
+      width: container.clientWidth,
+      height: 380,
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: '#8b95b0',
+        fontFamily: "'Inter', sans-serif",
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.04)' },
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: 'rgba(99, 102, 241, 0.4)',
+          width: 1,
+          style: 2,
+          labelBackgroundColor: '#6366f1',
+        },
+        horzLine: {
+          color: 'rgba(99, 102, 241, 0.4)',
+          width: 1,
+          style: 2,
+          labelBackgroundColor: '#6366f1',
+        },
+      },
+      rightPriceScale: {
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        scaleMargins: { top: 0.1, bottom: 0.25 },
+      },
+      timeScale: {
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        timeVisible: activeTimeframe === '1D' || activeTimeframe === '1W',
+        secondsVisible: false,
+        fixLeftEdge: true,
+        fixRightEdge: false,
+      },
+      handleScroll: true,
+      handleScale: true,
+    });
+
+    chartRef.current = chart;
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#10b981',
+      downColor: '#ef4444',
+      wickUpColor: '#10b981',
+      wickDownColor: '#ef4444',
+      borderUpColor: '#10b981',
+      borderDownColor: '#ef4444',
+    });
+    candlestickSeriesRef.current = candleSeries;
+
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'volume',
+    });
+    chart.priceScale('volume').applyOptions({
+      scaleMargins: { top: 0.8, bottom: 0 },
+    });
+    volumeSeriesRef.current = volumeSeries;
+
+    // Line series for predictions (if applicable)
+    const predSeries = chart.addSeries(LineSeries, {
+      color: '#a855f7',
+      lineWidth: 2,
+      lineStyle: 2, // Dashed
+      title: 'Prediction',
+      priceScaleId: 'right',
+    });
+    predictionSeriesRef.current = predSeries;
+
+    // Prepare data
+    const sortedData = [...chartData].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    const seen = new Set<string>();
+    const uniqueData = sortedData.filter((d) => {
+      const key = (activeTimeframe === '1D' || activeTimeframe === '1W') ? d.date : d.date.split('T')[0];
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const useTimestamp = activeTimeframe === '1D' || activeTimeframe === '1W';
+
+    const candleData: CandlestickData<Time>[] = uniqueData.map((d) => ({
+      time: (useTimestamp
+        ? Math.floor(new Date(d.date).getTime() / 1000)
+        : d.date.split('T')[0]) as Time,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+    }));
+
+    const volumeData: HistogramData<Time>[] = uniqueData.map((d) => ({
+      time: (useTimestamp
+        ? Math.floor(new Date(d.date).getTime() / 1000)
+        : d.date.split('T')[0]) as Time,
+      value: d.volume,
+      color:
+        d.close >= d.open
+          ? 'rgba(16, 185, 129, 0.22)'
+          : 'rgba(239, 68, 68, 0.22)',
+    }));
+
+    candleSeries.setData(candleData);
+    volumeSeries.setData(volumeData);
+
+    // Add predictions to the line series if we are in 1M view
+    if (predictions && predictions.length > 0 && activeTimeframe === '1M') {
+      const lastPoint = uniqueData[uniqueData.length - 1];
+      const lastDate = new Date(lastPoint.date);
+      
+      const predLineData: LineData<Time>[] = [
+        { time: lastPoint.date.split('T')[0] as Time, value: lastPoint.close }
+      ];
+
+      predictions.forEach((p) => {
+        const nextDate = new Date(lastDate);
+        nextDate.setDate(nextDate.getDate() + p.day);
+        
+        // Skip weekends for prediction dates in chart
+        const day = nextDate.getDay();
+        if (day === 0) nextDate.setDate(nextDate.getDate() + 1); // Sun -> Mon
+        if (day === 6) nextDate.setDate(nextDate.getDate() + 2); // Sat -> Mon
+
+        predLineData.push({
+          time: nextDate.toISOString().split('T')[0] as Time,
+          value: p.price,
+        });
+      });
+
+      predSeries.setData(predLineData);
+    } else {
+      predSeries.setData([]);
+    }
+
+    chart.timeScale().fitContent();
+
+    // Crosshair tooltip
+    chart.subscribeCrosshairMove((param: any) => {
+      if (!tooltipRef.current) return;
+      const tooltip = tooltipRef.current;
+
+      if (!param.time || !param.point || param.point.x < 0 || param.point.y < 0) {
+        tooltip.style.display = 'none';
+        return;
+      }
+
+      const candleInfo = param.seriesData.get(candleSeries) as CandlestickData<Time> | undefined;
+      const volInfo = param.seriesData.get(volumeSeries) as HistogramData<Time> | undefined;
+      const predInfo = param.seriesData.get(predSeries) as LineData<Time> | undefined;
+
+      if (!candleInfo && !predInfo) {
+        tooltip.style.display = 'none';
+        return;
+      }
+
+      tooltip.style.display = 'block';
+
+      if (candleInfo) {
+        const change = candleInfo.close - candleInfo.open;
+        const changePct = ((change / candleInfo.open) * 100).toFixed(2);
+        const isUp = change >= 0;
+
+        tooltip.innerHTML = `
+          <div class="ohlc-tooltip-row">
+            <span class="ohlc-label">O</span>
+            <span class="ohlc-val">₹${candleInfo.open.toFixed(2)}</span>
+            <span class="ohlc-label">H</span>
+            <span class="ohlc-val">₹${candleInfo.high.toFixed(2)}</span>
+          </div>
+          <div class="ohlc-tooltip-row">
+            <span class="ohlc-label">L</span>
+            <span class="ohlc-val">₹${candleInfo.low.toFixed(2)}</span>
+            <span class="ohlc-label">C</span>
+            <span class="ohlc-val ${isUp ? 'ohlc-up' : 'ohlc-down'}">₹${candleInfo.close.toFixed(2)}</span>
+          </div>
+          <div class="ohlc-tooltip-row">
+            <span class="ohlc-label">Chg</span>
+            <span class="ohlc-val ${isUp ? 'ohlc-up' : 'ohlc-down'}">${isUp ? '+' : ''}${change.toFixed(2)} (${isUp ? '+' : ''}${changePct}%)</span>
+            ${volInfo ? `<span class="ohlc-label">Vol</span><span class="ohlc-val">${formatVol(volInfo.value)}</span>` : ''}
+          </div>
+        `;
+      } else if (predInfo) {
+        tooltip.innerHTML = `
+          <div class="ohlc-tooltip-row">
+            <span class="ohlc-label" style="color: #a855f7">PRED</span>
+            <span class="ohlc-val" style="color: #a855f7">₹${predInfo.value.toFixed(2)}</span>
+          </div>
+          <div class="ohlc-tooltip-row">
+            <span class="ohlc-label">Date</span>
+            <span class="ohlc-val">${param.time}</span>
+          </div>
+        `;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      let left = param.point.x + 16;
+      const top = Math.max(param.point.y - 10, 10);
+      if (left + 230 > containerRect.width) left = param.point.x - 230;
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${top}px`;
+    });
+
+    const handleResize = () => {
+      if (chartRef.current && container) {
+        chartRef.current.applyOptions({ width: container.clientWidth });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+      chartRef.current = null;
+    };
+  }, [chartData, activeTimeframe, predictions]);
+
+  // Real-time updates
+  useEffect(() => {
+    if (!candlestickSeriesRef.current || !volumeSeriesRef.current || !livePrice) return;
+    if (chartData.length === 0) return;
+
+    const lastPoint = chartData[chartData.length - 1];
+    const useTimestamp = activeTimeframe === '1D' || activeTimeframe === '1W';
+    const time = (useTimestamp
+      ? Math.floor(new Date(lastPoint.date).getTime() / 1000)
+      : lastPoint.date.split('T')[0]) as Time;
+
+    candlestickSeriesRef.current.update({
+      time,
+      open: lastPoint.open,
+      high: Math.max(lastPoint.high, livePrice),
+      low: Math.min(lastPoint.low, livePrice),
+      close: livePrice,
+    });
+
+    if (liveVolume) {
+      volumeSeriesRef.current.update({
+        time,
+        value: liveVolume,
+        color:
+          livePrice >= lastPoint.open
+            ? 'rgba(16, 185, 129, 0.22)'
+            : 'rgba(239, 68, 68, 0.22)',
+      });
+    }
+
+    // Also update prediction start point if visible
+    if (predictionSeriesRef.current && activeTimeframe === '1M') {
+       // Only update first point (connecting point)
+    }
+
+  }, [livePrice, liveVolume, activeTimeframe, chartData]);
 
   const handleTimeframeChange = useCallback(
     async (tf: TimeFrame) => {
       setActiveTimeframe(tf);
       if (tf === '1M') {
-        // 1M is the default data from search
         setChartData(defaultData);
         return;
       }
@@ -66,13 +350,8 @@ const StockChart: React.FC<StockChartProps> = ({
       setIsLoadingTimeframe(true);
       try {
         const response = await stockAPI.chart(symbol, tf);
-        const newData = response.data.historicalData.map((d: HistoricalDataPoint) => ({
-          date: d.date,
-          close: d.close,
-        }));
-        setChartData(newData);
+        setChartData(response.data.historicalData);
       } catch {
-        // On error, keep existing data
         console.error('Failed to fetch chart data for timeframe:', tf);
       } finally {
         setIsLoadingTimeframe(false);
@@ -81,169 +360,8 @@ const StockChart: React.FC<StockChartProps> = ({
     [symbol, defaultData]
   );
 
-  // When default data changes (new search), reset to 1M
-  React.useEffect(() => {
-    setChartData(defaultData);
-    setActiveTimeframe('1M');
-  }, [defaultData]);
-
-  const formatLabel = (dateStr: string, tf: TimeFrame) => {
-    const date = new Date(dateStr);
-    switch (tf) {
-      case '1D':
-        return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-      case '1W':
-        return date.toLocaleDateString('en-IN', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-      case '1M':
-      case '3M':
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      case '6M':
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      case '1Y':
-        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      case '5Y':
-        return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      default:
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
-  };
-
-  const historicalLabels = chartData.map((d) => formatLabel(d.date, activeTimeframe));
-
-  const predictionLabels =
-    activeTimeframe === '1M' && predictions
-      ? predictions.map((p) => `Day +${p.day}`)
-      : [];
-
-  const allLabels = [...historicalLabels, ...predictionLabels];
-
-  const historicalPrices = chartData.map((d) => d.close);
-  const predictionPrices =
-    activeTimeframe === '1M' && predictions
-      ? predictions.map((p) => p.price)
-      : [];
-
-  // For the prediction line, connect it from the last historical point
-  const predictionLine =
-    predictionPrices.length > 0
-      ? [
-          ...new Array(historicalPrices.length - 1).fill(null),
-          historicalPrices[historicalPrices.length - 1],
-          ...predictionPrices,
-        ]
-      : [];
-
-  // Determine color based on overall trend
-  const isPositive =
-    historicalPrices.length >= 2 &&
-    historicalPrices[historicalPrices.length - 1] >= historicalPrices[0];
-
-  const lineColor = isPositive ? '#10b981' : '#ef4444';
-  const fillColor = isPositive
-    ? 'rgba(16, 185, 129, 0.08)'
-    : 'rgba(239, 68, 68, 0.08)';
-
-  const data = {
-    labels: allLabels,
-    datasets: [
-      {
-        label: `${symbol} Price`,
-        data: [
-          ...historicalPrices,
-          ...new Array(predictionPrices.length).fill(null),
-        ],
-        borderColor: lineColor,
-        backgroundColor: fillColor,
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        pointHoverBackgroundColor: lineColor,
-        fill: true,
-        tension: 0.4,
-      },
-      ...(predictionPrices.length > 0
-        ? [
-            {
-              label: 'Predicted Price',
-              data: predictionLine,
-              borderColor: '#a855f7',
-              backgroundColor: 'rgba(168, 85, 247, 0.08)',
-              borderWidth: 2,
-              borderDash: [6, 4],
-              pointRadius: 4,
-              pointBackgroundColor: '#a855f7',
-              pointBorderColor: '#a855f7',
-              fill: true,
-              tension: 0.4,
-            },
-          ]
-        : []),
-    ],
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: 'top' as const,
-        labels: {
-          color: '#8b95b0',
-          font: { family: 'Inter', size: 12 },
-          usePointStyle: true,
-          pointStyle: 'circle',
-          padding: 20,
-        },
-      },
-      tooltip: {
-        backgroundColor: '#1a2035',
-        titleColor: '#f0f4ff',
-        bodyColor: '#8b95b0',
-        borderColor: 'rgba(99, 102, 241, 0.3)',
-        borderWidth: 1,
-        padding: 12,
-        cornerRadius: 8,
-        titleFont: { family: 'Inter', weight: 'bold' as const },
-        bodyFont: { family: 'Inter' },
-        callbacks: {
-          label: (context: any) => {
-            if (context.parsed.y !== null) {
-              return `${context.dataset.label || ''}: ₹${context.parsed.y.toFixed(2)}`;
-            }
-            return '';
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        ticks: {
-          color: '#5a6480',
-          font: { family: 'Inter', size: 10 },
-          maxRotation: 45,
-          maxTicksLimit: activeTimeframe === '1D' ? 12 : 15,
-        },
-        grid: { color: 'rgba(255, 255, 255, 0.04)' },
-      },
-      y: {
-        ticks: {
-          color: '#5a6480',
-          font: { family: 'Inter', size: 11 },
-          callback: (value: string | number) => `₹${value}`,
-        },
-        grid: { color: 'rgba(255, 255, 255, 0.04)' },
-      },
-    },
-    interaction: {
-      intersect: false,
-      mode: 'index' as const,
-    },
-  };
-
   return (
     <div className="chart-container-full">
-      {/* TradingView-style Timeframe Selector */}
       <div className="timeframe-selector" id="timeframe-selector">
         {TIMEFRAMES.map((tf) => (
           <button
@@ -257,14 +375,23 @@ const StockChart: React.FC<StockChartProps> = ({
         ))}
       </div>
 
-      {/* Loading overlay */}
       {isLoadingTimeframe && (
         <div className="chart-loading-overlay">
           <div className="spinner"></div>
         </div>
       )}
 
-      <Line data={data} options={options} />
+      <div
+        ref={chartContainerRef}
+        className="candlestick-chart-area"
+        style={{ width: '100%', height: 380 }}
+      >
+        <div
+          ref={tooltipRef}
+          className="ohlc-tooltip"
+          style={{ display: 'none' }}
+        ></div>
+      </div>
     </div>
   );
 };
