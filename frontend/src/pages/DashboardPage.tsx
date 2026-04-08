@@ -191,24 +191,51 @@ const DashboardPage: React.FC = () => {
 
   // Fetch suggestions
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      // Suggest if symbol has 2+ characters
-      if (searchSymbol.length >= 2) {
-        try {
-          const response = await stockAPI.suggest(searchSymbol);
-          setSuggestions(response.data.suggestions);
-          setShowSuggestions(response.data.suggestions.length > 0);
-        } catch (err) {
-          console.error('Failed to fetch suggestions:', err);
+    const fetchResults = async () => {
+      // 1. Local filtering from 'Trading/Popular Stocks' (for instant feedback)
+      const localMatches = popularStocks
+        .filter(s =>
+          s.symbol.toUpperCase().includes(searchSymbol.toUpperCase()) ||
+          s.name.toUpperCase().includes(searchSymbol.toUpperCase())
+        )
+        .map(s => ({
+          symbol: s.symbol,
+          name: s.name,
+          exchange: 'NSE',
+          type: 'EQUITY'
+        }))
+        .slice(0, 3);
+
+      if (searchSymbol.length >= 1) {
+        let apiSuggestions: StockSuggestion[] = [];
+        
+        // 2. API suggestions (for characters >= 2 or if local matches are low)
+        if (searchSymbol.length >= 2) {
+          try {
+            const response = await stockAPI.suggest(searchSymbol);
+            apiSuggestions = response.data.suggestions;
+          } catch (err) {
+            console.error('Failed to fetch suggestions:', err);
+          }
         }
+
+        // Merge and remove duplicates by symbol
+        const merged = [...localMatches, ...apiSuggestions];
+        const unique = merged.filter((item, index, self) =>
+          index === self.findIndex((t) => t.symbol === item.symbol)
+        );
+
+        setSuggestions(unique);
+        setShowSuggestions(unique.length > 0);
       } else {
         setSuggestions([]);
         setShowSuggestions(false);
       }
-    }, 250); // Debounce delay
+    };
 
+    const timer = setTimeout(fetchResults, 200);
     return () => clearTimeout(timer);
-  }, [searchSymbol]);
+  }, [searchSymbol, popularStocks]);
 
   // Click outside to close suggestions
   useEffect(() => {
@@ -335,13 +362,14 @@ const DashboardPage: React.FC = () => {
         </div>
 
         {/* Search Section */}
-        <section className="search-section animate-fade-in-up" id="search-section">
-          <div className="search-bar">
-            <div className="search-input-wrapper" style={{ position: 'relative', flex: 1 }}>
+        <section className="search-section animate-fade-in-up" id="search-section" style={{ maxWidth: '600px' }}>
+          <div className="search-bar no-button">
+            <div className="search-input-wrapper" style={{ position: 'relative', width: '100%' }}>
+              <i className="search-icon-inside">🔍</i>
               <input
                 type="text"
-                className="form-input"
-                placeholder="Search stock symbol (e.g. RELIANCE, TCS, INFY, AAPL)"
+                className="form-input search-input-clean"
+                placeholder="Search stock (e.g. RELIANCE, TCS, AAPL)"
                 value={searchSymbol}
                 onChange={(e) => setSearchSymbol(e.target.value.toUpperCase())}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -368,16 +396,8 @@ const DashboardPage: React.FC = () => {
                 </div>
               )}
             </div>
-            <button
-              className="btn btn-primary"
-              onClick={() => handleSearch()}
-              disabled={isSearching}
-              id="stock-search-btn"
-            >
-              {isSearching ? <div className="spinner"></div> : '🔍 Search'}
-            </button>
           </div>
-          {error && <div className="alert alert-error" style={{ marginTop: 12, maxWidth: 600 }}>{error}</div>}
+          {error && <div className="alert alert-error" style={{ marginTop: 12 }}>{error}</div>}
         </section>
 
         {/* Live Ticker Bar */}
