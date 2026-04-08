@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import StockChart from '../components/StockChart';
+import LivePrice from '../components/LivePrice';
 import {
   stockAPI,
   StockQuote,
@@ -283,9 +284,7 @@ const DashboardPage: React.FC = () => {
                 {liveError ? 'RECONNECTING' : 'LIVE'}
               </span>
               <span className="live-ticker-symbol">{quote.symbol}</span>
-              <span className={`live-ticker-price ${getPriceFlashClass()}`}>
-                {formatCurrency(quote.price)}
-              </span>
+              <LivePrice price={quote.price} previousPrice={prevPrice} size="md" />
               <span className={`live-ticker-change ${quote.change >= 0 ? 'positive' : 'negative'}`}>
                 {quote.change >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(quote.change))} ({quote.changePercent})
               </span>
@@ -322,19 +321,18 @@ const DashboardPage: React.FC = () => {
         {quote && (
           <>
             <div className="stats-grid stagger" id="stock-stats">
-              <div className={`stat-card stat-card-main ${getPriceFlashClass()}`}>
+              <div className="stat-card stat-card-main">
                 <div className="stat-label">{quote.name || quote.symbol}</div>
-                <div className={`stat-value stat-value-live ${getPriceFlashClass()}`}>
-                  {formatCurrency(quote.price)}
+                <div className="stat-value stat-value-live">
+                  <LivePrice price={quote.price} previousPrice={prevPrice} size="lg" showCurrency />
                 </div>
                 <div className={`stat-change ${quote.change >= 0 ? 'positive' : 'negative'}`}>
                   {quote.change >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(quote.change))} ({quote.changePercent})
                 </div>
-                {prevPrice !== null && prevPrice !== quote.price && (
-                  <div className="price-prev">
-                    was {formatCurrency(prevPrice)}
-                  </div>
-                )}
+                <div className="market-status">
+                  <span className="market-status-dot"></span>
+                  Market Open
+                </div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Open</div>
