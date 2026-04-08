@@ -80,7 +80,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
     const chart = createChart(container, {
       width: container.clientWidth,
-      height: 380,
+      height: 420,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: '#8b95b0',
@@ -380,7 +380,7 @@ const StockChart: React.FC<StockChartProps> = ({
       <div
         ref={chartContainerRef}
         className="candlestick-chart-area"
-        style={{ width: '100%', height: 380 }}
+        style={{ width: '100%', height: 420 }}
       >
         <div
           ref={tooltipRef}
