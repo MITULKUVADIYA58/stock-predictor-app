@@ -11,6 +11,7 @@ import {
   Favorite,
   SearchHistoryItem,
   PopularStock,
+  StockSuggestion,
 } from '../services/api';
 import { isMarketOpen } from '../utils/market';
 
@@ -19,8 +20,12 @@ const POLL_INTERVAL = 1000; // Poll every 1 second for real-time updates
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const [searchSymbol, setSearchSymbol] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+   const [isSearching, setIsSearching] = useState(false);
   const [isPredicting, setIsPredicting] = useState(false);
+
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Stock data state
   const [quote, setQuote] = useState<StockQuote | null>(null);
@@ -184,6 +189,38 @@ const DashboardPage: React.FC = () => {
     };
   }, [stopLivePolling]);
 
+  // Fetch suggestions
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      // Suggest if symbol has 2+ characters
+      if (searchSymbol.length >= 2) {
+        try {
+          const response = await stockAPI.suggest(searchSymbol);
+          setSuggestions(response.data.suggestions);
+          setShowSuggestions(response.data.suggestions.length > 0);
+        } catch (err) {
+          console.error('Failed to fetch suggestions:', err);
+        }
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 250); // Debounce delay
+
+    return () => clearTimeout(timer);
+  }, [searchSymbol]);
+
+  // Click outside to close suggestions
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showSuggestions && !document.getElementById('stock-search-input')?.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSuggestions]);
+
   const handleSearch = async (symbol?: string) => {
     const query = (symbol || searchSymbol).trim().toUpperCase();
     if (!query) {
@@ -193,6 +230,7 @@ const DashboardPage: React.FC = () => {
 
     setError('');
     setIsSearching(true);
+    setShowSuggestions(false);
     setPredictions([]);
     setConfidence(0);
     stopLivePolling();
@@ -299,15 +337,37 @@ const DashboardPage: React.FC = () => {
         {/* Search Section */}
         <section className="search-section animate-fade-in-up" id="search-section">
           <div className="search-bar">
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Search stock symbol (e.g. RELIANCE, TCS, INFY, HDFCBANK)"
-              value={searchSymbol}
-              onChange={(e) => setSearchSymbol(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              id="stock-search-input"
-            />
+            <div className="search-input-wrapper" style={{ position: 'relative', flex: 1 }}>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Search stock symbol (e.g. RELIANCE, TCS, INFY, AAPL)"
+                value={searchSymbol}
+                onChange={(e) => setSearchSymbol(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                id="stock-search-input"
+                autoComplete="off"
+              />
+              
+              {showSuggestions && (
+                <div className="search-suggestions">
+                  {suggestions.map((s) => (
+                    <div
+                      key={s.symbol}
+                      className="suggestion-item"
+                      onClick={() => handleSearch(s.symbol)}
+                    >
+                      <div className="suggestion-symbol">{s.symbol}</div>
+                      <div className="suggestion-info">
+                        <span className="suggestion-name">{s.name}</span>
+                        <span className="suggestion-exch">{s.exchange}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               className="btn btn-primary"
               onClick={() => handleSearch()}

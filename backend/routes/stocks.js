@@ -44,6 +44,31 @@ function resolveSymbol(input) {
   return sym; // Return as-is for international stocks (AAPL, GOOGL, etc.)
 }
 
+// GET /api/stocks/suggest?q=RELI
+router.get('/suggest', authenticateToken, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.length < 2) {
+      return res.json({ suggestions: [] });
+    }
+
+    const results = await yahooFinance.search(q, { quotesCount: 5 });
+    const suggestions = results.quotes
+      .filter(item => item.isYahooFinance)
+      .map(item => ({
+        symbol: item.symbol,
+        name: item.shortname || item.longname || item.symbol,
+        exchange: item.exchange,
+        type: item.quoteType
+      }));
+
+    res.json({ suggestions });
+  } catch (error) {
+    console.error('Suggestion Error:', error);
+    res.status(500).json({ error: 'Failed to fetch suggestions' });
+  }
+});
+
 // GET /api/stocks/search?symbol=RELIANCE.BSE
 router.get('/search', authenticateToken, async (req, res) => {
   try {

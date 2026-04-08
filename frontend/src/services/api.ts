@@ -145,7 +145,21 @@ export interface PopularStock {
   currency: string;
 }
 
+export interface StockSuggestion {
+  symbol: string;
+  name: string;
+  exchange: string;
+  type: string;
+}
+
+export interface SuggestionResponse {
+  suggestions: StockSuggestion[];
+}
+
 export const stockAPI = {
+  suggest: (q: string) =>
+    api.get<SuggestionResponse>('/stocks/suggest', { params: { q } }),
+
   search: (symbol: string) =>
     api.get<StockSearchResponse>('/stocks/search', { params: { symbol } }),
 
