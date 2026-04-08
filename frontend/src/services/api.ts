@@ -59,6 +59,9 @@ export interface StockQuote {
   changePercent: string;
   currency: string;
   exchange: string;
+  fiftyTwoWeekHigh: number;
+  fiftyTwoWeekLow: number;
+  marketCap: number;
 }
 
 export interface HistoricalDataPoint {
@@ -93,6 +96,8 @@ export interface LiveQuote {
   changePercent: string;
   currency: string;
   exchange: string;
+  fiftyTwoWeekHigh: number;
+  fiftyTwoWeekLow: number;
   timestamp: number;
 }
 
@@ -119,6 +124,27 @@ export interface SearchHistoryItem {
   searched_at: string;
 }
 
+export type TimeFrame = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '5Y';
+
+export interface ChartResponse {
+  historicalData: HistoricalDataPoint[];
+  timeframe: string;
+}
+
+export interface PopularStock {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: string;
+  volume: number;
+  high: number;
+  low: number;
+  fiftyTwoWeekHigh: number;
+  fiftyTwoWeekLow: number;
+  currency: string;
+}
+
 export const stockAPI = {
   search: (symbol: string) =>
     api.get<StockSearchResponse>('/stocks/search', { params: { symbol } }),
@@ -128,6 +154,12 @@ export const stockAPI = {
 
   predict: (symbol: string) =>
     api.get<PredictionResponse>('/stocks/predict', { params: { symbol } }),
+
+  chart: (symbol: string, timeframe: TimeFrame) =>
+    api.get<ChartResponse>('/stocks/chart', { params: { symbol, timeframe } }),
+
+  popular: () =>
+    api.get<PopularStock[]>('/stocks/popular'),
 
   getFavorites: () =>
     api.get<Favorite[]>('/stocks/favorites'),

@@ -10,6 +10,7 @@ import {
   Prediction,
   Favorite,
   SearchHistoryItem,
+  PopularStock,
 } from '../services/api';
 
 const POLL_INTERVAL = 5000; // Poll every 5 seconds
@@ -36,9 +37,17 @@ const DashboardPage: React.FC = () => {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Volume tracking for animation
+  const [prevVolume, setPrevVolume] = useState<number | null>(null);
+  const [volumeDirection, setVolumeDirection] = useState<'up' | 'down' | null>(null);
+
   // Favorites & history
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
+
+  // Popular stocks
+  const [popularStocks, setPopularStocks] = useState<PopularStock[]>([]);
+  const [isLoadingPopular, setIsLoadingPopular] = useState(true);
 
   // Errors & toasts
   const [error, setError] = useState('');
@@ -62,9 +71,23 @@ const DashboardPage: React.FC = () => {
     }
   }, []);
 
+  // Load popular stocks on mount
+  const loadPopularStocks = useCallback(async () => {
+    setIsLoadingPopular(true);
+    try {
+      const res = await stockAPI.popular();
+      setPopularStocks(res.data);
+    } catch {
+      // silent fail
+    } finally {
+      setIsLoadingPopular(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadFavoritesAndHistory();
-  }, [loadFavoritesAndHistory]);
+    loadPopularStocks();
+  }, [loadFavoritesAndHistory, loadPopularStocks]);
 
   // Live price polling
   const fetchLiveQuote = useCallback(async (symbol: string) => {
@@ -76,12 +99,19 @@ const DashboardPage: React.FC = () => {
         if (prev) {
           const oldPrice = prev.price;
           const newPrice = liveData.price;
+          const oldVolume = prev.volume;
+          const newVolume = liveData.volume;
 
           if (newPrice !== oldPrice) {
             setPrevPrice(oldPrice);
             setPriceDirection(newPrice > oldPrice ? 'up' : 'down');
-            // Clear direction flash after 1.5s
             setTimeout(() => setPriceDirection(null), 1500);
+          }
+
+          if (newVolume !== oldVolume) {
+            setPrevVolume(oldVolume);
+            setVolumeDirection(newVolume > oldVolume ? 'up' : 'down');
+            setTimeout(() => setVolumeDirection(null), 1500);
           }
         }
 
@@ -99,6 +129,8 @@ const DashboardPage: React.FC = () => {
           name: liveData.name,
           currency: liveData.currency,
           exchange: liveData.exchange,
+          fiftyTwoWeekHigh: liveData.fiftyTwoWeekHigh,
+          fiftyTwoWeekLow: liveData.fiftyTwoWeekLow,
         };
       });
 
@@ -112,19 +144,16 @@ const DashboardPage: React.FC = () => {
 
   // Start/stop live polling
   const startLivePolling = useCallback((symbol: string) => {
-    // Clear existing intervals
     if (pollRef.current) clearInterval(pollRef.current);
     if (tickerRef.current) clearInterval(tickerRef.current);
 
     setIsLive(true);
     setLiveError(false);
 
-    // Poll for new prices every 5 seconds
     pollRef.current = setInterval(() => {
       fetchLiveQuote(symbol);
     }, POLL_INTERVAL);
 
-    // Update "seconds ago" ticker every second
     tickerRef.current = setInterval(() => {
       setSecondsSinceUpdate((prev) => prev + 1);
     }, 1000);
@@ -142,7 +171,6 @@ const DashboardPage: React.FC = () => {
     setIsLive(false);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopLivePolling();
@@ -163,6 +191,8 @@ const DashboardPage: React.FC = () => {
     stopLivePolling();
     setPrevPrice(null);
     setPriceDirection(null);
+    setPrevVolume(null);
+    setVolumeDirection(null);
 
     try {
       const response = await stockAPI.search(query);
@@ -173,7 +203,6 @@ const DashboardPage: React.FC = () => {
       setSecondsSinceUpdate(0);
       loadFavoritesAndHistory();
 
-      // Start live polling after initial search
       startLivePolling(query);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
@@ -232,9 +261,16 @@ const DashboardPage: React.FC = () => {
   const formatCurrency = (num: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(num);
 
-  const getPriceFlashClass = () => {
-    if (!priceDirection) return '';
-    return priceDirection === 'up' ? 'price-flash-up' : 'price-flash-down';
+  const formatVolume = (vol: number) => {
+    if (vol >= 10000000) return (vol / 10000000).toFixed(2) + ' Cr';
+    if (vol >= 100000) return (vol / 100000).toFixed(2) + ' L';
+    if (vol >= 1000) return (vol / 1000).toFixed(2) + ' K';
+    return vol.toString();
+  };
+
+  const get52WeekPosition = (price: number, low: number, high: number) => {
+    if (high === low) return 50;
+    return ((price - low) / (high - low)) * 100;
   };
 
   return (
@@ -290,6 +326,11 @@ const DashboardPage: React.FC = () => {
               </span>
             </div>
             <div className="live-ticker-right">
+              <span className="live-ticker-volume">
+                Vol: <span className={`volume-value ${volumeDirection ? `volume-flash-${volumeDirection}` : ''}`}>
+                  {formatVolume(quote.volume)}
+                </span>
+              </span>
               <span className="live-ticker-time">
                 Updated {secondsSinceUpdate}s ago
               </span>
@@ -348,13 +389,62 @@ const DashboardPage: React.FC = () => {
               </div>
               <div className="stat-card">
                 <div className="stat-label">Volume</div>
-                <div className="stat-value">{formatNumber(quote.volume)}</div>
+                <div className={`stat-value ${volumeDirection ? `volume-flash-${volumeDirection}` : ''}`}>
+                  {formatVolume(quote.volume)}
+                </div>
+                <div className="volume-detail">{formatNumber(quote.volume)} shares</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Prev Close</div>
                 <div className="stat-value">{formatCurrency(quote.previousClose)}</div>
               </div>
             </div>
+
+            {/* 52-Week High/Low Card */}
+            {(quote.fiftyTwoWeekHigh > 0 || quote.fiftyTwoWeekLow > 0) && (
+              <div className="week52-card animate-fade-in-up" id="52-week-range">
+                <h3>📊 52-Week Range</h3>
+                <div className="week52-content">
+                  <div className="week52-values">
+                    <div className="week52-low">
+                      <span className="week52-label">52W Low</span>
+                      <span className="week52-price low">{formatCurrency(quote.fiftyTwoWeekLow)}</span>
+                    </div>
+                    <div className="week52-bar-container">
+                      <div className="week52-bar">
+                        <div
+                          className="week52-marker"
+                          style={{ left: `${get52WeekPosition(quote.price, quote.fiftyTwoWeekLow, quote.fiftyTwoWeekHigh)}%` }}
+                        >
+                          <div className="week52-marker-tooltip">
+                            {formatCurrency(quote.price)}
+                          </div>
+                          <div className="week52-marker-dot"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="week52-high">
+                      <span className="week52-label">52W High</span>
+                      <span className="week52-price high">{formatCurrency(quote.fiftyTwoWeekHigh)}</span>
+                    </div>
+                  </div>
+                  <div className="week52-stats">
+                    <div className="week52-stat">
+                      <span className="week52-stat-label">Distance from Low</span>
+                      <span className="week52-stat-value positive">
+                        +{((quote.price - quote.fiftyTwoWeekLow) / quote.fiftyTwoWeekLow * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="week52-stat">
+                      <span className="week52-stat-label">Distance from High</span>
+                      <span className="week52-stat-value negative">
+                        {((quote.price - quote.fiftyTwoWeekHigh) / quote.fiftyTwoWeekHigh * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 28 }} className="animate-fade-in">
@@ -447,16 +537,69 @@ const DashboardPage: React.FC = () => {
           </>
         )}
 
-        {/* Empty state when no stock searched */}
+        {/* Popular Stocks Section — shows when no stock is searched */}
         {!quote && !isSearching && (
-          <div className="empty-state animate-fade-in" style={{ marginTop: 60 }}>
-            <div className="icon">📈</div>
-            <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)' }}>
-              Search for a stock symbol above to get started
-            </p>
-            <p style={{ fontSize: '0.85rem', marginTop: 8 }}>
-              Try RELIANCE, TCS, INFY, HDFCBANK, WIPRO, or ITC
-            </p>
+          <div className="popular-stocks-section animate-fade-in-up" id="popular-stocks">
+            <h3 className="section-title">
+              🔥 Trending Stocks
+              <span className="section-subtitle">Real-time prices from NSE</span>
+            </h3>
+            {isLoadingPopular ? (
+              <div className="popular-loading">
+                <div className="spinner"></div>
+                <p>Loading market data...</p>
+              </div>
+            ) : popularStocks.length > 0 ? (
+              <div className="popular-grid">
+                {popularStocks.map((stock) => (
+                  <div
+                    className="popular-card"
+                    key={stock.symbol}
+                    onClick={() => handleSearch(stock.symbol)}
+                    id={`popular-${stock.symbol}`}
+                  >
+                    <div className="popular-header">
+                      <div className="popular-symbol">{stock.symbol}</div>
+                      <div className={`popular-change-badge ${stock.change >= 0 ? 'positive' : 'negative'}`}>
+                        {stock.change >= 0 ? '▲' : '▼'} {stock.changePercent}
+                      </div>
+                    </div>
+                    <div className="popular-name">{stock.name}</div>
+                    <div className="popular-price">{formatCurrency(stock.price)}</div>
+                    <div className="popular-details">
+                      <div className="popular-detail">
+                        <span className="popular-detail-label">Vol</span>
+                        <span className="popular-detail-value">{formatVolume(stock.volume)}</span>
+                      </div>
+                      <div className="popular-detail">
+                        <span className="popular-detail-label">H</span>
+                        <span className="popular-detail-value">{formatCurrency(stock.high)}</span>
+                      </div>
+                      <div className="popular-detail">
+                        <span className="popular-detail-label">L</span>
+                        <span className="popular-detail-value">{formatCurrency(stock.low)}</span>
+                      </div>
+                    </div>
+                    <div className="popular-52w">
+                      <span className="popular-52w-label">52W:</span>
+                      <span className="popular-52w-low">{formatCurrency(stock.fiftyTwoWeekLow)}</span>
+                      <span className="popular-52w-sep">—</span>
+                      <span className="popular-52w-high">{formatCurrency(stock.fiftyTwoWeekHigh)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state animate-fade-in" style={{ marginTop: 40 }}>
+                <div className="icon">📈</div>
+                <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)' }}>
+                  Search for a stock symbol above to get started
+                </p>
+                <p style={{ fontSize: '0.85rem', marginTop: 8 }}>
+                  Try RELIANCE, TCS, INFY, HDFCBANK, WIPRO, or ITC
+                </p>
+              </div>
+            )}
           </div>
         )}
 

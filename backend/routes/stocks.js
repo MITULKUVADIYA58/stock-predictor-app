@@ -114,6 +114,9 @@ router.get('/search', authenticateToken, async (req, res) => {
         changePercent,
         currency: quoteData.currency || 'INR',
         exchange: quoteData.exchange || '',
+        fiftyTwoWeekHigh: quoteData.fiftyTwoWeekHigh || 0,
+        fiftyTwoWeekLow: quoteData.fiftyTwoWeekLow || 0,
+        marketCap: quoteData.marketCap || 0,
       },
       historicalData,
     });
@@ -159,6 +162,8 @@ router.get('/live-quote', authenticateToken, async (req, res) => {
       changePercent,
       currency: quoteData.currency || 'INR',
       exchange: quoteData.exchange || '',
+      fiftyTwoWeekHigh: quoteData.fiftyTwoWeekHigh || 0,
+      fiftyTwoWeekLow: quoteData.fiftyTwoWeekLow || 0,
       timestamp: Date.now(),
     });
   } catch (err) {
@@ -331,6 +336,113 @@ router.get('/history', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('History fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch search history.' });
+  }
+});
+
+// GET /api/stocks/chart?symbol=RELIANCE&timeframe=1M
+// Returns historical data for the given timeframe
+router.get('/chart', authenticateToken, async (req, res) => {
+  try {
+    const { symbol, timeframe = '1M' } = req.query;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Stock symbol is required.' });
+    }
+
+    const yahooSymbol = resolveSymbol(symbol);
+
+    // Map timeframe to period and interval
+    const timeframeMap = {
+      '1D': { days: 1, interval: '5m' },
+      '1W': { days: 7, interval: '15m' },
+      '1M': { days: 30, interval: '1d' },
+      '3M': { days: 90, interval: '1d' },
+      '6M': { days: 180, interval: '1d' },
+      '1Y': { days: 365, interval: '1wk' },
+      '5Y': { days: 1825, interval: '1mo' },
+    };
+
+    const config = timeframeMap[timeframe] || timeframeMap['1M'];
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - config.days);
+
+    const historicalResult = await yahooFinance.chart(yahooSymbol, {
+      period1: startDate.toISOString().split('T')[0],
+      period2: endDate.toISOString().split('T')[0],
+      interval: config.interval,
+    });
+
+    const historicalData = (historicalResult.quotes || [])
+      .filter((q) => q.close !== null)
+      .map((q) => ({
+        date: new Date(q.date).toISOString(),
+        open: parseFloat(q.open?.toFixed(2) || 0),
+        high: parseFloat(q.high?.toFixed(2) || 0),
+        low: parseFloat(q.low?.toFixed(2) || 0),
+        close: parseFloat(q.close?.toFixed(2) || 0),
+        volume: q.volume || 0,
+      }));
+
+    res.json({ historicalData, timeframe });
+  } catch (err) {
+    console.error('Chart data error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch chart data.' });
+  }
+});
+
+// GET /api/stocks/popular — returns live quotes for popular Indian stocks
+router.get('/popular', authenticateToken, async (req, res) => {
+  try {
+    const popularSymbols = [
+      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
+      'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'LT',
+      'WIPRO', 'TATAMOTORS',
+    ];
+
+    const quotes = [];
+
+    // Fetch quotes in parallel (batches of 4 to avoid rate limits)
+    for (let i = 0; i < popularSymbols.length; i += 4) {
+      const batch = popularSymbols.slice(i, i + 4);
+      const results = await Promise.allSettled(
+        batch.map(async (sym) => {
+          const yahooSymbol = resolveSymbol(sym);
+          const quoteData = await yahooFinance.quote(yahooSymbol);
+          if (!quoteData || !quoteData.regularMarketPrice) return null;
+
+          const change = quoteData.regularMarketChange || 0;
+          const changePercent = quoteData.regularMarketChangePercent
+            ? quoteData.regularMarketChangePercent.toFixed(2) + '%'
+            : '0.00%';
+
+          return {
+            symbol: sym,
+            name: quoteData.shortName || quoteData.longName || sym,
+            price: quoteData.regularMarketPrice || 0,
+            change: parseFloat(change.toFixed(2)),
+            changePercent,
+            volume: quoteData.regularMarketVolume || 0,
+            high: quoteData.regularMarketDayHigh || 0,
+            low: quoteData.regularMarketDayLow || 0,
+            fiftyTwoWeekHigh: quoteData.fiftyTwoWeekHigh || 0,
+            fiftyTwoWeekLow: quoteData.fiftyTwoWeekLow || 0,
+            currency: quoteData.currency || 'INR',
+          };
+        })
+      );
+
+      results.forEach((r) => {
+        if (r.status === 'fulfilled' && r.value) {
+          quotes.push(r.value);
+        }
+      });
+    }
+
+    res.json(quotes);
+  } catch (err) {
+    console.error('Popular stocks error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch popular stocks.' });
   }
 });
 
