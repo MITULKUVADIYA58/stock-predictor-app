@@ -109,13 +109,16 @@ const StockChart: React.FC<StockChartProps> = ({
       rightPriceScale: {
         borderColor: 'rgba(255, 255, 255, 0.08)',
         scaleMargins: { top: 0.1, bottom: 0.25 },
+        autoScale: true,
       },
       timeScale: {
         borderColor: 'rgba(255, 255, 255, 0.08)',
-        timeVisible: activeTimeframe === '1D' || activeTimeframe === '1W',
+        timeVisible: true,
         secondsVisible: false,
         fixLeftEdge: true,
-        fixRightEdge: false,
+        fixRightEdge: true, // Fixed the issue of trailing empty space
+        rightOffset: 5,     // Slight breathe room on the right
+        barSpacing: 8,      // Better spacing for candles
       },
       handleScroll: true,
       handleScale: true,
@@ -142,11 +145,10 @@ const StockChart: React.FC<StockChartProps> = ({
     });
     volumeSeriesRef.current = volumeSeries;
 
-    // Line series for predictions (if applicable)
     const predSeries = chart.addSeries(LineSeries, {
       color: '#a855f7',
       lineWidth: 2,
-      lineStyle: 2, // Dashed
+      lineStyle: 2,
       title: 'Prediction',
       priceScaleId: 'right',
     });
@@ -191,7 +193,7 @@ const StockChart: React.FC<StockChartProps> = ({
     candleSeries.setData(candleData);
     volumeSeries.setData(volumeData);
 
-    // Add predictions to the line series if we are in 1M view
+    // AI Predictions
     if (predictions && predictions.length > 0 && activeTimeframe === '1M') {
       const lastPoint = uniqueData[uniqueData.length - 1];
       const lastDate = new Date(lastPoint.date);
@@ -204,10 +206,9 @@ const StockChart: React.FC<StockChartProps> = ({
         const nextDate = new Date(lastDate);
         nextDate.setDate(nextDate.getDate() + p.day);
         
-        // Skip weekends for prediction dates in chart
         const day = nextDate.getDay();
-        if (day === 0) nextDate.setDate(nextDate.getDate() + 1); // Sun -> Mon
-        if (day === 6) nextDate.setDate(nextDate.getDate() + 2); // Sat -> Mon
+        if (day === 0) nextDate.setDate(nextDate.getDate() + 1);
+        if (day === 6) nextDate.setDate(nextDate.getDate() + 2);
 
         predLineData.push({
           time: nextDate.toISOString().split('T')[0] as Time,
@@ -220,8 +221,9 @@ const StockChart: React.FC<StockChartProps> = ({
       predSeries.setData([]);
     }
 
+    // Force fitting content and then set visible range to the end
     chart.timeScale().fitContent();
-
+    
     // Crosshair tooltip
     chart.subscribeCrosshairMove((param: any) => {
       if (!tooltipRef.current) return;
@@ -331,12 +333,6 @@ const StockChart: React.FC<StockChartProps> = ({
             : 'rgba(239, 68, 68, 0.22)',
       });
     }
-
-    // Also update prediction start point if visible
-    if (predictionSeriesRef.current && activeTimeframe === '1M') {
-       // Only update first point (connecting point)
-    }
-
   }, [livePrice, liveVolume, activeTimeframe, chartData]);
 
   const handleTimeframeChange = useCallback(

@@ -55,7 +55,6 @@ const Navbar: React.FC = () => {
   return (
     <nav className="navbar" id="main-navbar">
       <div className="navbar-brand">
-        <ThemeToggle />
         <div className="logo-icon">📈</div>
         <h1>StockVision</h1>
       </div>
@@ -74,6 +73,7 @@ const Navbar: React.FC = () => {
           Welcome, <strong>{user?.name || 'User'}</strong>
         </span>
         <div className="user-avatar">{initials}</div>
+        <ThemeToggle />
         <button
           className="btn btn-outline btn-sm"
           onClick={handleLogout}

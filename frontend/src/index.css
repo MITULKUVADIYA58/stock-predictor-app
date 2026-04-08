@@ -1916,7 +1916,7 @@ a:hover {
   justify-content: center;
   cursor: pointer;
   transition: all var(--transition-base);
-  margin-right: 12px;
+  margin: 0 10px;
   box-shadow: var(--accent-glow);
   z-index: 100;
 }
