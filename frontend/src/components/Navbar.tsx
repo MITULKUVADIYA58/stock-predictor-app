@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { isMarketOpen } from '../utils/market';
+import ThemeToggle from './ThemeToggle';
 
 const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -54,6 +55,7 @@ const Navbar: React.FC = () => {
   return (
     <nav className="navbar" id="main-navbar">
       <div className="navbar-brand">
+        <ThemeToggle />
         <div className="logo-icon">📈</div>
         <h1>StockVision</h1>
       </div>

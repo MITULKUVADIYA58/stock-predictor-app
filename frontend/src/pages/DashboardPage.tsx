@@ -92,6 +92,12 @@ const DashboardPage: React.FC = () => {
 
   // Live price polling
   const fetchLiveQuote = useCallback(async (symbol: string) => {
+    // Stop fetching if market is closed
+    if (!isMarketOpen()) {
+      setIsLive(false);
+      return;
+    }
+
     try {
       const response = await stockAPI.liveQuote(symbol);
       const liveData = response.data;
