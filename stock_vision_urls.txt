@@ -1,0 +1,22 @@
+STOCKVISION PRODUCTION URLS
+==========================
+
+FRONTEND (Vercel):
+-----------------
+Main Dashboard: https://frontend-seven-theta-34.vercel.app/dashboard
+Login Page:     https://frontend-seven-theta-34.vercel.app/login
+
+BACKEND API (Render):
+--------------------
+Base API URL:   https://stockvision-backend-n0ns.onrender.com
+Health Check:   https://stockvision-backend-n0ns.onrender.com/api/health
+Service Ping:   https://stockvision-backend-n0ns.onrender.com/api/stocks/ping
+
+SALESFORCE INTEGRATION:
+----------------------
+Auth & Auto-Push: https://stockvision-backend-n0ns.onrender.com/api/salesforce/auth
+
+INTERNAL DOCUMENTATION:
+----------------------
+Integration Guide: e:\new\stock-predictor\Salesforce_Integration.md
+LWC Package:      e:\new\stock-predictor\StockVision_LWC_Package.md
