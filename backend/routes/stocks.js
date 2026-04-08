@@ -25,9 +25,10 @@ function resolveSymbol(input) {
   if (sym.endsWith('.NSE')) {
     return sym.replace('.NSE', '.NS');
   }
-  // If no suffix and it looks like a common Indian stock, default to .NS
+
+  // Expanded Indian stock mappings: .BSE -> .BO, .NSE -> .NS
   const indianStocks = [
-    'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'HINDUNILVR',
+    'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR',
     'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'LT', 'HCLTECH',
     'AXISBANK', 'ASIANPAINT', 'MARUTI', 'SUNPHARMA', 'TITAN',
     'ULTRACEMCO', 'NESTLEIND', 'WIPRO', 'BAJFINANCE', 'BAJAJFINSV',
@@ -36,8 +37,27 @@ function resolveSymbol(input) {
     'COALINDIA', 'HINDALCO', 'DRREDDY', 'CIPLA', 'EICHERMOT',
     'DIVISLAB', 'BPCL', 'GRASIM', 'APOLLOHOSP', 'HEROMOTOCO',
     'TATACONSUM', 'BRITANNIA', 'BAJAJ-AUTO', 'M&M', 'UPL',
+    'SBILIFE', 'HDFCLIFE', 'BAJAJHLDNG', 'HAL', 'BEL', 'TVSMOTOR',
+    'VBL', 'DLF', 'ADANIGREEN', 'ADANIPOWER', 'ADANITRANS', 'ATGL',
+    'ZOMATO', 'TRENT', 'CHOLAFIN', 'SHREECEM', 'PIDILITIND', 
+    'SIEMENS', 'ABB', 'HAVELLS', 'ICICIPRULI', 'ICICIGI', 'TATAPOWER',
+    'GAIL', 'IOC', 'VEDL', 'AMBUJACEM', 'DABUR', 'GODREJCP',
+    'MARICO', 'SRF', 'COLPAL', 'BERGEPAINT', 'MUTHOOTFIN',
+    'ASHOKLEY', 'CUMMINSIND', 'PIIND', 'ASTRAL', 'POLYCAB',
+    'PAGEIND', 'AU SMALL FINANCE BANK', 'TATAELXSI', 'PERSISTENT',
+    'MPHASIS', 'COFORGE', 'LTIM', 'KPITTECH', 'MAXHEALTH', 'COROMANDEL',
+    'RECLTD', 'PFC', 'CANBK', 'IDFCFIRSTB', 'YESBANK', 'FEDERALBNK',
+    'BANDHANBNK', 'INDHOTEL', 'INDIAMART', 'NYKAA', 'PAYTM', 'POLICYBZR',
+    'DELHIVERY', 'LICI', 'ADANIPOWER', 'UNIONBANK', 'BANKBARODA',
+    'PNB', 'IDBI', 'CENTRALBK', 'INDIANB', 'IOB', 'MAHABANK',
   ];
   if (indianStocks.includes(sym)) {
+    return sym + '.NS';
+  }
+
+  // Handle common NSE mapping if user didn't include it
+  if (/^[A-Z0-9]+$/.test(sym) && sym.length <= 10) {
+    // If it's a simple uppercase word, it's likely an NSE symbol
     return sym + '.NS';
   }
 
@@ -425,7 +445,10 @@ router.get('/popular', authenticateToken, async (req, res) => {
     const popularSymbols = [
       'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
       'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'LT',
-      'WIPRO', 'TATAMOTORS',
+      'WIPRO', 'TATAMOTORS', 'HCLTECH', 'ASIANPAINT', 'MARUTI',
+      'SUNPHARMA', 'TITAN', 'ULTRACEMCO', 'ADANIENT', 'TATASTEEL',
+      'NTPC', 'POWERGRID', 'ONGC', 'JSWSTEEL', 'COALINDIA',
+      'BAJFINANCE', 'HINDUNILVR', 'ZOMATO', 'TRENT', 'HAL',
     ];
 
     const quotes = [];
