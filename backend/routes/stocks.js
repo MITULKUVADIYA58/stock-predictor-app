@@ -69,6 +69,9 @@ router.get('/suggest', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/stocks/ping
+router.get('/ping', (req, res) => res.json({ status: 'live' }));
+
 // GET /api/stocks/search?symbol=RELIANCE.BSE
 router.get('/search', authenticateToken, async (req, res) => {
   try {

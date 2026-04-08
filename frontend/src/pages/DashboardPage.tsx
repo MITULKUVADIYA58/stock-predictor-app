@@ -384,7 +384,10 @@ const DashboardPage: React.FC = () => {
                     <div
                       key={s.symbol}
                       className="suggestion-item"
-                      onClick={() => handleSearch(s.symbol)}
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Prevent input onBlur
+                        handleSearch(s.symbol);
+                      }}
                     >
                       <div className="suggestion-symbol">{s.symbol}</div>
                       <div className="suggestion-info">
